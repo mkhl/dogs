@@ -1,156 +1,85 @@
 package dogs
 package bench
 
-import org.openjdk.jmh.annotations.{Benchmark, Scope, State}
+import org.openjdk.jmh.annotations.{Benchmark, Param, Scope, Setup, State}
 import scala.collection.immutable.{List => SList, Nil => SNil}
 import scalaz.{DList => SZDList, IList}
 
+trait Data {
+  @Param(Array("10", "100", "1000", "10000"))
+  var n: Int = _
+
+  var list: List[Int] = _
+  var dlist: DList[Int] = _
+  var dequeue: Dequeue[Int] = _
+  var szdlist: SZDList[Int] = _
+
+  @Setup
+  def setup: Unit = {
+    val grouped = (1 to n).toList.grouped(10)
+    list = List.fromIterable(1 to n)
+    dlist = grouped.foldLeft(DList.empty[Int]) { (d, g) =>
+      d ++ DList(List.fromIterable(g))
+    }
+    dequeue = Dequeue((1 to n):_*)
+    szdlist = grouped.foldLeft(SZDList[Int]()) { (d, g) =>
+      d ++ SZDList(g:_*)
+    }
+  }
+}
+
 @State(Scope.Thread)
-class Append {
-  val listOfLists: SList[SList[Int]] =
-    (1 to 10000).toList.grouped(10).toList
-
-  val listOfListsDogs: SList[List[Int]] =
-    (1 to 10000).toList.grouped(10).toList.map(List.fromIterable)
-
-  val listOfDLists: SList[DList[Int]] =
-    (1 to 10000).toList.grouped(10).toList.map(x => DList(List.fromIterable(x)))
-
-  val listOfSZDLists: SList[SZDList[Int]] =
-    (1 to 10000).toList.grouped(10).toList.map(SZDList.apply)
+class Append extends Data {
 
   @Benchmark def dogsListAppend(): Unit = {
-    listOfListsDogs.foldLeft[List[Int]](List.empty)(_ ++ _)
+    list ++ List(0)
   }
 
   @Benchmark def dogsDListAppend(): Unit = {
-    listOfDLists.foldLeft[DList[Int]](DList.empty)(_ ++ _)
+    dlist ++ DList(List(0))
   }
 
   @Benchmark def scalazDListAppend(): Unit = {
-    listOfSZDLists.foldLeft[SZDList[Int]](SZDList(1))(_ ++ _)
+    szdlist ++ SZDList(0)
   }
 
   @Benchmark def dequeueAppend(): Unit = {
-    listOfLists.foldLeft[Dequeue[Int]](Dequeue.empty)((dq,li) =>
-      li.foldLeft(dq)(_ :+ _)
-    )
+    dequeue :+ 0
   }
 }
 
 @State(Scope.Thread)
-class AppendThenToList {
-  val listOfLists: SList[SList[Int]] =
-    (1 to 10000).toList.grouped(10).toList
-
-  val listOfListsDogs: SList[List[Int]] =
-    (1 to 10000).toList.grouped(10).toList.map(List.fromIterable)
-
-  val listOfDLists: SList[DList[Int]] =
-    (1 to 10000).toList.grouped(10).toList.map(x => DList(List.fromIterable(x)))
-
-  val listOfSZDLists: SList[SZDList[Int]] =
-    (1 to 10000).toList.grouped(10).toList.map(SZDList.apply)
+class ToList extends Data {
 
   @Benchmark def dogsList(): Unit = {
-    listOfListsDogs.foldLeft[List[Int]](List.empty)(_ ++ _)
+    list // is already a List
   }
 
-  @Benchmark def dogsDList(): Unit = {
-    listOfDLists.foldLeft[DList[Int]](DList.empty)(_ ++ _).toList
+  @Benchmark def dogsDListToList(): Unit = {
+    dlist.toList
   }
 
-  @Benchmark def scalaz(): Unit = {
-    listOfSZDLists.foldLeft[SZDList[Int]](SZDList(1))(_ ++ _).toList
+  @Benchmark def scalazDListToList(): Unit = {
+    szdlist.toList
   }
 
-  @Benchmark def dequeue(): Unit = {
-    listOfLists.foldLeft[Dequeue[Int]](Dequeue.empty)((dq,li) =>
-      li.foldLeft(dq)(_ :+ _)
-    ).foldRight[List[Int]](List.empty)(_ :: _)
+  @Benchmark def dequeueToList(): Unit = {
+    dequeue.foldRight(List.empty[Int])(_ :: _)
   }
 }
 
 @State(Scope.Thread)
-class AppendThenIterate {
-  val listOfLists: SList[SList[Int]] =
-    (1 to 10000).toList.grouped(10).toList
-
-  val listOfListsDogs: SList[List[Int]] =
-    (1 to 10000).toList.grouped(10).toList.map(List.fromIterable)
-
-  val listOfDLists: SList[DList[Int]] =
-    (1 to 10000).toList.grouped(10).toList.map(x => DList(List.fromIterable(x)))
-
-  val listOfSZDLists: SList[SZDList[Int]] =
-    (1 to 10000).toList.grouped(10).toList.map(SZDList.apply)
-
-  @Benchmark def dogsList(): Unit = {
-    val l = listOfListsDogs.foldLeft[List[Int]](List.empty)(_ ++ _)
-    l.foldLeft(())((x, y) => ())
-  }
-
-  @Benchmark def dogsDList(): Unit = {
-    val l = listOfDLists.foldLeft[DList[Int]](DList.empty)(_ ++ _)
-    def unc(a: Int, dl: DList[Int]): Eval[Unit] =
-      Eval.defer(Eval.now(dl.uncons(Eval.now(()), unc)))
-
-    l.uncons(Eval.now(()), unc).value
-  }
-
-  @Benchmark def scalaz(): Unit = {
-    val l = listOfSZDLists.foldLeft[SZDList[Int]](SZDList(1))(_ ++ _)
-     def unc(a: Int, dl: SZDList[Int]): Unit = dl.uncons((), unc)
-    l.uncons((), unc)
-  }
-
-  @Benchmark def dequeue(): Unit = {
-    val l = listOfLists.foldLeft[Dequeue[Int]](Dequeue.empty)((dq,li) =>
-      li.foldLeft(dq)(_ :+ _)
-    )
-
-    def unc(o: Option[(Int,Dequeue[Int])]): Unit = o match {
-      case Some((_, o)) => unc(o.uncons)
-      case _ => ()
-    }
-
-    unc(l.uncons)
-  }
-}
-
-
-@State(Scope.Thread)
-class AppendThenHeadOption {
-
-  val listOfLists: SList[SList[Int]] =
-    (1 to 10000).toList.grouped(10).toList
-
-  val listOfDLists: SList[DList[Int]] =
-    (1 to 10000).toList.grouped(10).toList.map(x => DList(List.fromIterable(x)))
-
-  val dogsdl = listOfDLists.foldLeft[DList[Int]](DList.empty)(_ ++ _)
-
-  val listOfSZDLists: SList[SZDList[Int]] =
-    (1 to 10000).toList.grouped(10).toList.map(SZDList.apply)
-
-  val scaalzdl = listOfSZDLists.foldLeft[SZDList[Int]](SZDList(1))(_ ++ _)
-
-  val dequeue = listOfLists.foldLeft[Dequeue[Int]](Dequeue.empty)((dq,li) =>
-      li.foldLeft(dq)(_ :+ _)
-    )
-
+class HeadOption extends Data {
 
   @Benchmark def dogsDListHeadOption(): Unit = {
-    dogsdl.headOption
+    dlist.headOption
   }
 
   @Benchmark def scalazDListHeadOption(): Unit = {
-    scaalzdl.headOption
+    szdlist.headOption
   }
 
   @Benchmark def dequeueHeadOption(): Unit = {
     dequeue.frontOption
   }
 }
-
-
