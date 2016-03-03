@@ -61,7 +61,7 @@ sealed abstract class Dequeue[A] {
   def cons(a: A): Dequeue[A] = this match {
     case EmptyDequeue() => SingletonDequeue(a)
     case SingletonDequeue(single) => FullDequeue(Nel(a, List.empty), 1, Nel(single, List.empty), 1 )
-    case FullDequeue(front, fs, back, bs) => FullDequeue(Nel(a, Nel(front.head, front.tail)), fs+1, back, bs)
+    case FullDequeue(front, fs, back, bs) => FullDequeue(Nel(a, front), fs+1, back, bs)
   }
 
   /**
@@ -70,7 +70,7 @@ sealed abstract class Dequeue[A] {
   def snoc(a: A): Dequeue[A] = this match {
     case EmptyDequeue() => SingletonDequeue(a)
     case SingletonDequeue(single) => FullDequeue(Nel(single, List.empty), 1, Nel(a, List.empty), 1 )
-    case FullDequeue(front, fs, back, bs) => FullDequeue(front, fs, Nel(a, Nel(back.head, back.tail)), bs+1)
+    case FullDequeue(front, fs, back, bs) => FullDequeue(front, fs, Nel(a, back), bs+1)
   }
 
   /**
@@ -200,7 +200,7 @@ private[dogs] case object EmptyDequeue extends Dequeue[Nothing] { self =>
   override val isEmpty = true
   override val frontOption = Option.none
   override val backOption = Option.none
-  
+
   override def toString: String = "EmptyDequeue"
 
   def apply[A]() = self.asInstanceOf[Dequeue[A]]
